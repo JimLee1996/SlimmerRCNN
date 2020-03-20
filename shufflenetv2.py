@@ -1,22 +1,8 @@
 import torch
 import torch.nn as nn
-from .utils import load_state_dict_from_url
 
-__all__ = [
-    'ShuffleNetV2', 'shufflenet_v2_x0_5', 'shufflenet_v2_x1_0',
-    'shufflenet_v2_x1_5', 'shufflenet_v2_x2_0'
-]
-
-model_urls = {
-    'shufflenetv2_x0.5':
-        'https://download.pytorch.org/models/shufflenetv2_x0.5-f707e7126e.pth',
-    'shufflenetv2_x1.0':
-        'https://download.pytorch.org/models/shufflenetv2_x1-5666bf0f80.pth',
-    'shufflenetv2_x1.5':
-        None,
-    'shufflenetv2_x2.0':
-        None,
-}
+from detectron2.modeling import BACKBONE_REGISTRY, Backbone, FPN, ShapeSpec
+from detectron2.modeling.backbone.fpn import LastLevelMaxPool
 
 
 def channel_shuffle(x, groups):
@@ -114,14 +100,20 @@ class InvertedResidual(nn.Module):
         return out
 
 
-class ShuffleNetV2(nn.Module):
+class ShuffleNetV2(Backbone):
 
     def __init__(self,
                  stages_repeats,
                  stages_out_channels,
-                 num_classes=1000,
+                 num_classes=None,
+                 out_features=None,
                  inverted_residual=InvertedResidual):
         super(ShuffleNetV2, self).__init__()
+        self.num_classes = num_classes
+
+        current_stride = 4  # = stride 2 conv -> stride 2 max pool
+        self._out_feature_strides = {"stem": current_stride}
+        self._out_feature_channels = {"stem": stages_out_channels[0]}
 
         if len(stages_repeats) != 3:
             raise ValueError(
@@ -129,10 +121,9 @@ class ShuffleNetV2(nn.Module):
         if len(stages_out_channels) != 5:
             raise ValueError(
                 'expected stages_out_channels as list of 5 positive ints')
-        self._stage_out_channels = stages_out_channels
 
         input_channels = 3
-        output_channels = self._stage_out_channels[0]
+        output_channels = stages_out_channels[0]
         self.conv1 = nn.Sequential(
             nn.Conv2d(input_channels, output_channels, 3, 2, 1, bias=False),
             nn.BatchNorm2d(output_channels),
@@ -142,107 +133,128 @@ class ShuffleNetV2(nn.Module):
 
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
-        stage_names = ['stage{}'.format(i) for i in [2, 3, 4]]
-        for name, repeats, output_channels in zip(stage_names, stages_repeats,
-                                                  self._stage_out_channels[1:]):
+        self.stages_and_names = []
+        for i, (repeats, output_channels) in enumerate(
+                zip(stages_repeats, stages_out_channels[1:])):
             seq = [inverted_residual(input_channels, output_channels, 2)]
-            for i in range(repeats - 1):
+            for _ in range(repeats - 1):
                 seq.append(
                     inverted_residual(output_channels, output_channels, 1))
-            setattr(self, name, nn.Sequential(*seq))
+            stage = nn.Sequential(*seq)
+            name = "stage" + str(i + 2)
+            self.add_module(name, stage)
+            self.stages_and_names.append((stage, name))
+            # TODO hard code here!
+            self._out_feature_strides[
+                name] = current_stride = current_stride * 2
+            self._out_feature_channels[name] = output_channels
             input_channels = output_channels
 
-        output_channels = self._stage_out_channels[-1]
-        self.conv5 = nn.Sequential(
-            nn.Conv2d(input_channels, output_channels, 1, 1, 0, bias=False),
-            nn.BatchNorm2d(output_channels),
-            nn.ReLU(inplace=True),
-        )
+        if self.num_classes is not None:
+            output_channels = stages_out_channels[-1]
+            self.conv5 = nn.Sequential(
+                nn.Conv2d(input_channels, output_channels, 1, 1, 0, bias=False),
+                nn.BatchNorm2d(output_channels),
+                nn.ReLU(inplace=True),
+            )
 
-        self.fc = nn.Linear(output_channels, num_classes)
+            self.fc = nn.Linear(output_channels, num_classes)
 
-    def _forward_impl(self, x):
+            nn.init.normal_(self.fc.weight, std=0.01)
+            name = "linear"
+
+        if out_features is None:
+            out_features = [name]
+        self._out_features = out_features
+        assert len(self._out_features)
+        children = [x[0] for x in self.named_children()]
+        for out_feature in self._out_features:
+            assert out_feature in children, "Available children: {}".format(
+                ", ".join(children))
+
+    def forward(self, x):
+        outputs = {}
         # See note [TorchScript super()]
         x = self.conv1(x)
         x = self.maxpool(x)
-        x = self.stage2(x)
-        x = self.stage3(x)
-        x = self.stage4(x)
-        x = self.conv5(x)
-        x = x.mean([2, 3])  # globalpool
-        x = self.fc(x)
-        return x
+        if "stem" in self._out_features:
+            outputs["stem"] = x
+        for stage, name in self.stages_and_names:
+            x = stage(x)
+            if name in self._out_features:
+                outputs[name] = x
+        if self.num_classes is not None:
+            x = self.conv5(x)
+            x = x.mean([2, 3])  # globalpool
+            x = self.fc(x)
+            if "linear" in self._out_features:
+                outputs["linear"] = x
+        return outputs
 
-    def forward(self, x):
-        return self._forward_impl(x)
-
-
-def _shufflenetv2(arch, pretrained, progress, *args, **kwargs):
-    model = ShuffleNetV2(*args, **kwargs)
-
-    if pretrained:
-        model_url = model_urls[arch]
-        if model_url is None:
-            raise NotImplementedError(
-                'pretrained {} is not supported as of now'.format(arch))
-        else:
-            state_dict = load_state_dict_from_url(model_url, progress=progress)
-            model.load_state_dict(state_dict)
-
-    return model
+    def output_shape(self):
+        return {
+            name: ShapeSpec(
+                channels=self._out_feature_channels[name],
+                stride=self._out_feature_strides[name],
+            ) for name in self._out_features
+        }
 
 
-def shufflenet_v2_x0_5(pretrained=False, progress=True, **kwargs):
+@BACKBONE_REGISTRY.register()
+def build_shufflenetv2_backbone(cfg):
     """
-    Constructs a ShuffleNetV2 with 0.5x output channels, as described in
-    `"ShuffleNet V2: Practical Guidelines for Efficient CNN Architecture Design"
-    <https://arxiv.org/abs/1807.11164>`_.
+    Create a ShuffleNetV2 instance from config.
 
+    Returns:
+        ResNet: a :class:`ShuffleNetV2` instance.
+    """
+
+    configs = {
+        "x0.5": [[4, 8, 4], [24, 48, 96, 192, 1024]],
+        "x1.0": [[4, 8, 4], [24, 116, 232, 464, 1024]],
+        "x1.5": [[4, 8, 4], [24, 176, 352, 704, 1024]],
+        "x2.0": [[4, 8, 4], [24, 244, 488, 976, 2048]],
+    }
+
+    out_features = cfg.MODEL.SHUFFLENETS.OUT_FEATURES
+    depth_multiplier = cfg.MODEL.SHUFFLENETS.DM
+
+    # TODO
+    repeats, out_channels = configs[depth_multiplier]
+
+    return ShuffleNetV2(repeats, out_channels, out_features=out_features)
+
+
+@BACKBONE_REGISTRY.register()
+def build_shufflenetv2_fpn_backbone(cfg):
+    """
     Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-        progress (bool): If True, displays a progress bar of the download to stderr
+        cfg: a detectron2 CfgNode
+
+    Returns:
+        backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
     """
-    return _shufflenetv2('shufflenetv2_x0.5', pretrained, progress, [4, 8, 4],
-                         [24, 48, 96, 192, 1024], **kwargs)
+    bottom_up = build_shufflenetv2_backbone(cfg)
+    in_features = cfg.MODEL.FPN.IN_FEATURES
+    out_channels = cfg.MODEL.FPN.OUT_CHANNELS
+    backbone = FPN(
+        bottom_up=bottom_up,
+        in_features=in_features,
+        out_channels=out_channels,
+        norm=cfg.MODEL.FPN.NORM,
+        top_block=LastLevelMaxPool(),
+        fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
+    )
+
+    return backbone
 
 
-def shufflenet_v2_x1_0(pretrained=False, progress=True, **kwargs):
-    """
-    Constructs a ShuffleNetV2 with 1.0x output channels, as described in
-    `"ShuffleNet V2: Practical Guidelines for Efficient CNN Architecture Design"
-    <https://arxiv.org/abs/1807.11164>`_.
+if __name__ == "__main__":
+    from config import cfg
+    model = build_shufflenetv2_fpn_backbone(cfg)
+    print(model)
 
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-        progress (bool): If True, displays a progress bar of the download to stderr
-    """
-    return _shufflenetv2('shufflenetv2_x1.0', pretrained, progress, [4, 8, 4],
-                         [24, 116, 232, 464, 1024], **kwargs)
-
-
-def shufflenet_v2_x1_5(pretrained=False, progress=True, **kwargs):
-    """
-    Constructs a ShuffleNetV2 with 1.5x output channels, as described in
-    `"ShuffleNet V2: Practical Guidelines for Efficient CNN Architecture Design"
-    <https://arxiv.org/abs/1807.11164>`_.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-        progress (bool): If True, displays a progress bar of the download to stderr
-    """
-    return _shufflenetv2('shufflenetv2_x1.5', pretrained, progress, [4, 8, 4],
-                         [24, 176, 352, 704, 1024], **kwargs)
-
-
-def shufflenet_v2_x2_0(pretrained=False, progress=True, **kwargs):
-    """
-    Constructs a ShuffleNetV2 with 2.0x output channels, as described in
-    `"ShuffleNet V2: Practical Guidelines for Efficient CNN Architecture Design"
-    <https://arxiv.org/abs/1807.11164>`_.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-        progress (bool): If True, displays a progress bar of the download to stderr
-    """
-    return _shufflenetv2('shufflenetv2_x2.0', pretrained, progress, [4, 8, 4],
-                         [24, 244, 488, 976, 2048], **kwargs)
+    x = torch.randn(2, 3, 480, 800)
+    y = model(x)
+    print(y.keys())
+    print([x.shape for x in y.values()])
