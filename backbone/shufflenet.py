@@ -224,7 +224,7 @@ class ShuffleNetV2(Backbone):
 
 
 @BACKBONE_REGISTRY.register()
-def build_shufflenetv2_backbone(cfg):
+def build_shufflenetv2_backbone(cfg, input_shape=None):
     """
     Create a ShuffleNetV2 instance from config.
 
@@ -255,7 +255,7 @@ def build_shufflenetv2_backbone(cfg):
 
 
 @BACKBONE_REGISTRY.register()
-def build_shufflenetv2_fpn_backbone(cfg):
+def build_shufflenetv2_fpn_backbone(cfg, input_shape=None):
     """
     Args:
         cfg: a detectron2 CfgNode
