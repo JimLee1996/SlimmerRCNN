@@ -7,7 +7,6 @@ from detectron2.modeling.backbone.fpn import LastLevelMaxPool
 from .fpn import DepthwiseSeparableFPN
 
 
-
 def channel_shuffle(x, groups):
     # type: (torch.Tensor, int) -> torch.Tensor
     batchsize, num_channels, height, width = x.data.size()
@@ -40,9 +39,9 @@ class InvertedResidual(nn.Module):
             self.branch1 = nn.Sequential(
                 self.depthwise_conv(inp,
                                     inp,
-                                    kernel_size=3,
+                                    kernel_size=5,
                                     stride=self.stride,
-                                    padding=1),
+                                    padding=2),
                 nn.BatchNorm2d(inp),
                 nn.Conv2d(inp,
                           branch_features,
@@ -67,9 +66,9 @@ class InvertedResidual(nn.Module):
             nn.ReLU(inplace=True),
             self.depthwise_conv(branch_features,
                                 branch_features,
-                                kernel_size=3,
+                                kernel_size=5,
                                 stride=self.stride,
-                                padding=1),
+                                padding=2),
             nn.BatchNorm2d(branch_features),
             nn.Conv2d(branch_features,
                       branch_features,
@@ -112,7 +111,6 @@ class ShuffleNetV2(Backbone):
                  stages_out_channels,
                  num_classes=None,
                  out_features=None,
-                 model_path=None,
                  inverted_residual=InvertedResidual):
         super(ShuffleNetV2, self).__init__()
         self.num_classes = num_classes
@@ -178,25 +176,6 @@ class ShuffleNetV2(Backbone):
             assert out_feature in children, "Available children: {}".format(
                 ", ".join(children))
 
-        if model_path is not None:
-            self._load_weights(model_path)
-
-        self._freeze()
-
-    def _load_weights(self, path):
-        print("Loading pretrained shufflenet weights from {}.".format(path))
-        state_dict = torch.load(path)
-        self.load_state_dict(state_dict, strict=False)
-        print("Loading successfully.")
-
-    # TODO
-    def _freeze(self):
-        # freeze stem
-        for p in self.conv1.parameters():
-            p.requires_grad = False
-        for p in self.maxpool.parameters():
-            p.requires_grad = False
-
     def forward(self, x):
         outputs = {}
         # See note [TorchScript super()]
@@ -236,24 +215,19 @@ def build_shufflenetv2_backbone(cfg, input_shape=None):
 
     # TODO
     configs = {
-        "x0.5": [[4, 8, 4], [24, 48, 96, 192, 1024],
-                 "shufflenetv2_x0.5-f707e7126e.pth"],
-        "x1.0": [[4, 8, 4], [24, 116, 232, 464, 1024],
-                 "shufflenetv2_x1-5666bf0f80.pth"],
-        "x1.5": [[4, 8, 4], [24, 176, 352, 704, 1024], None],
-        "x2.0": [[4, 8, 4], [24, 244, 488, 976, 2048], None],
+        "x0.5": [[4, 8, 4], [24, 48, 96, 192, 1024]],
+        "x1.0": [[4, 8, 4], [24, 116, 232, 464, 1024]],
+        "x1.5": [[4, 8, 4], [24, 176, 352, 704, 1024]],
+        "x2.0": [[4, 8, 4], [24, 244, 488, 976, 2048]],
     }
 
     out_features = cfg.MODEL.SHUFFLENETS.OUT_FEATURES
     depth_multiplier = cfg.MODEL.SHUFFLENETS.DM
 
     # TODO
-    repeats, out_channels, model_path = configs[depth_multiplier]
+    repeats, out_channels = configs[depth_multiplier]
 
-    return ShuffleNetV2(repeats,
-                        out_channels,
-                        out_features=out_features,
-                        model_path=model_path)
+    return ShuffleNetV2(repeats, out_channels, out_features=out_features)
 
 
 @BACKBONE_REGISTRY.register()

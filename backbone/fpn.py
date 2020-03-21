@@ -42,9 +42,9 @@ class DepthwiseSeparableFPN(Backbone):
             # depthwise
             output_conv = Conv2d(out_channels,
                                  out_channels,
-                                 kernel_size=3,
+                                 kernel_size=5,
                                  stride=1,
-                                 padding=1,
+                                 padding=2,
                                  bias=use_bias,
                                  norm=output_norm,
                                  groups=out_channels)
