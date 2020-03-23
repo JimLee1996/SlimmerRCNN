@@ -174,6 +174,17 @@ class ShuffleNetV2(Backbone):
             assert out_feature in children, "Available children: {}".format(
                 ", ".join(children))
 
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight,
+                                        mode='fan_out',
+                                        nonlinearity='relu')
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                nn.init.constant_(m.bias, 0)
+
     def forward(self, x):
         outputs = {}
         # See note [TorchScript super()]
