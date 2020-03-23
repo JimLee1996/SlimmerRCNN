@@ -97,9 +97,7 @@ class InvertedResidual(nn.Module):
         else:
             out = torch.cat((self.branch1(x), self.branch2(x)), dim=1)
 
-        # TODO: Is it right? (for inference)
-        if self.training:
-            out = channel_shuffle(out, 2)
+        out = channel_shuffle(out, 2)
 
         return out
 
