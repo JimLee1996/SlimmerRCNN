@@ -117,10 +117,10 @@ class ShuffleNetV2(Backbone):
         self._out_feature_strides = {"stem": current_stride}
         self._out_feature_channels = {"stem": stages_out_channels[0]}
 
-        if len(stages_repeats) != 3:
+        if len(stages_repeats) != 4:
             raise ValueError(
                 'expected stages_repeats as list of 3 positive ints')
-        if len(stages_out_channels) != 5:
+        if len(stages_out_channels) != 6:
             raise ValueError(
                 'expected stages_out_channels as list of 5 positive ints')
 
@@ -138,7 +138,11 @@ class ShuffleNetV2(Backbone):
         self.stages_and_names = []
         for i, (repeats, output_channels) in enumerate(
                 zip(stages_repeats, stages_out_channels[1:])):
-            seq = [inverted_residual(input_channels, output_channels, 2)]
+            # NOTE: the stride in the first stage
+            first_stride = 1 if i == 0 else 2
+            seq = [
+                inverted_residual(input_channels, output_channels, first_stride)
+            ]
             for _ in range(repeats - 1):
                 seq.append(
                     inverted_residual(output_channels, output_channels, 1))
@@ -148,7 +152,7 @@ class ShuffleNetV2(Backbone):
             self.stages_and_names.append((stage, name))
             # TODO hard code here!
             self._out_feature_strides[
-                name] = current_stride = current_stride * 2
+                name] = current_stride = current_stride * first_stride
             self._out_feature_channels[name] = output_channels
             input_channels = output_channels
 
@@ -224,10 +228,10 @@ def build_shufflenetv2_backbone(cfg, input_shape=None):
 
     # TODO
     configs = {
-        "x0.5": [[4, 8, 4], [24, 48, 96, 192, 1024]],
-        "x1.0": [[4, 8, 4], [24, 116, 232, 464, 1024]],
-        "x1.5": [[4, 8, 4], [24, 176, 352, 704, 1024]],
-        "x2.0": [[4, 8, 4], [24, 244, 488, 976, 2048]],
+        "x0.5": [[2, 4, 8, 4], [24, 24, 48, 96, 192, 1024]],
+        "x1.0": [[2, 4, 8, 4], [24, 24, 116, 232, 464, 1024]],
+        "x1.5": [[2, 4, 8, 4], [24, 24, 176, 352, 704, 1024]],
+        "x2.0": [[2, 4, 8, 4], [24, 24, 244, 488, 976, 2048]],
     }
 
     out_features = cfg.MODEL.SHUFFLENETS.OUT_FEATURES

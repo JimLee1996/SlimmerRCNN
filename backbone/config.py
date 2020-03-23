@@ -14,10 +14,10 @@ cfg.merge_from_file(model_zoo.get_config_file(base_model))
 # SHUFFLENET BASE CONFIG
 cfg.MODEL.BACKBONE.NAME = "build_shufflenetv2_fpn_backbone"
 cfg.MODEL.SHUFFLENETS = CN()
-cfg.MODEL.SHUFFLENETS.DM = "x1.0"
-cfg.MODEL.SHUFFLENETS.OUT_FEATURES = ["stage2", "stage3", "stage4"]
-cfg.MODEL.FPN.IN_FEATURES = ["stage2", "stage3", "stage4"]
-cfg.MODEL.ANCHOR_GENERATOR.SIZES = [[64], [128], [256], [512]]
+cfg.MODEL.SHUFFLENETS.OUT_FEATURES = ["stage2", "stage3", "stage4", "stage5"]
+cfg.MODEL.FPN.IN_FEATURES = ["stage2", "stage3", "stage4", "stage5"]
+cfg.MODEL.ANCHOR_GENERATOR.SIZES = [[32], [64], [128], [256], [512]]
 cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
-cfg.MODEL.RPN.IN_FEATURES = ["p3", "p4", "p5", "p6"]
-cfg.MODEL.ROI_HEADS.IN_FEATURES = ["p3", "p4", "p5"]
+cfg.MODEL.RPN.IN_FEATURES = ["p2", "p3", "p4", "p5", "p6"]
+
+cfg.MODEL.ROI_HEADS.IN_FEATURES = ["p2", "p3", "p4", "p5"]
