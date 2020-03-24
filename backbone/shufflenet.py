@@ -4,7 +4,7 @@ import torch.nn as nn
 from detectron2.modeling import BACKBONE_REGISTRY, Backbone, ShapeSpec
 from detectron2.modeling.backbone.fpn import LastLevelMaxPool
 
-from .fpn import DepthwiseSeparableFPN
+from .fpn import DepthwiseFPN
 
 
 def channel_shuffle(x, groups):
@@ -255,7 +255,7 @@ def build_shufflenetv2_fpn_backbone(cfg, input_shape=None):
     bottom_up = build_shufflenetv2_backbone(cfg)
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.FPN.OUT_CHANNELS
-    backbone = DepthwiseSeparableFPN(
+    backbone = DepthwiseFPN(
         bottom_up=bottom_up,
         in_features=in_features,
         out_channels=out_channels,

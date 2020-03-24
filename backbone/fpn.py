@@ -8,7 +8,7 @@ from detectron2.modeling.backbone.backbone import Backbone
 from detectron2.modeling.backbone.fpn import FPN, _assert_strides_are_log2_contiguous
 
 
-class DepthwiseSeparableFPN(Backbone):
+class DepthwiseFPN(Backbone):
 
     def __init__(self,
                  bottom_up,
@@ -17,7 +17,7 @@ class DepthwiseSeparableFPN(Backbone):
                  norm="",
                  top_block=None,
                  fuse_type="sum"):
-        super(DepthwiseSeparableFPN, self).__init__()
+        super(DepthwiseFPN, self).__init__()
         assert isinstance(bottom_up, Backbone)
 
         input_shapes = bottom_up.output_shape()
