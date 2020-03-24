@@ -18,6 +18,8 @@ cfg.MODEL.SHUFFLENETS.OUT_FEATURES = ["stage2", "stage3", "stage4", "stage5"]
 cfg.MODEL.FPN.IN_FEATURES = ["stage2", "stage3", "stage4", "stage5"]
 cfg.MODEL.ANCHOR_GENERATOR.SIZES = [[32], [64], [128], [256], [512]]
 cfg.MODEL.ANCHOR_GENERATOR.ASPECT_RATIOS = [[0.5, 1.0, 2.0]]
+cfg.MODEL.RPN.HEAD_NAME = "SeparableRPNHead"
 cfg.MODEL.RPN.IN_FEATURES = ["p2", "p3", "p4", "p5", "p6"]
+cfg.MODEL.RPN.MID_CHANNELS = 64  # cfg.MODEL.FPN.OUT_CHANNELS / 2
 
 cfg.MODEL.ROI_HEADS.IN_FEATURES = ["p2", "p3", "p4", "p5"]
