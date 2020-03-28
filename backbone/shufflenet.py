@@ -229,7 +229,7 @@ def build_shufflenetv2_backbone(cfg, input_shape=None):
     # TODO
     configs = {
         "small": [[2, 4, 8, 4], [24, 24, 48, 96, 192, 1024]],
-        "large": [[2, 4, 8, 4], [64, 64, 128, 256, 512, 1024]],
+        "large": [[4, 4, 8, 4], [64, 64, 128, 256, 512, 1024]],
     }
 
     out_features = cfg.MODEL.SHUFFLENETS.OUT_FEATURES
