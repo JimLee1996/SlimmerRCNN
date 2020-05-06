@@ -15,7 +15,7 @@ cfg.merge_from_file(model_zoo.get_config_file(base_model))
 cfg.MODEL.BACKBONE.NAME = "build_shufflenetv2_fpn_backbone"
 
 cfg.MODEL.SHUFFLENETS = CN()
-cfg.MODEL.SHUFFLENETS.DM = "large"
+cfg.MODEL.SHUFFLENETS.DM = "mid"
 cfg.MODEL.SHUFFLENETS.OUT_FEATURES = ["stage2", "stage3", "stage4", "stage5"]
 
 # FPN
@@ -33,7 +33,7 @@ cfg.MODEL.ROI_BOX_HEAD.POOLER_TYPE = "ROIAlignV2"
 cfg.MODEL.ROI_BOX_HEAD.NUM_CONV = 1
 cfg.MODEL.ROI_BOX_HEAD.CONV_DIM = 32
 cfg.MODEL.ROI_BOX_HEAD.NUM_FC = 1
-cfg.MODEL.ROI_BOX_HEAD.FC_DIM = 512
+cfg.MODEL.ROI_BOX_HEAD.FC_DIM = 400
 
 cfg.INPUT.MAX_SIZE_TEST = 608
 cfg.INPUT.MIN_SIZE_TEST = 608
